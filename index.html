@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="サンプル管理">
+<meta name="theme-color" content="#4F46E5">
+<title>商品サンプル管理</title>
+<link rel="manifest" id="manifestLink">
+<link rel="apple-touch-icon" id="appIcon">
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<style>
+:root{
+  --p:#4F46E5;--bg:#F0F0F8;--card:#fff;
+  --t:#1E1B4B;--t2:#6B7280;--b:#E5E7EB;
+  --ok:#059669;--ng:#DC2626;--warn:#D97706;
+  --sh:0 1px 8px rgba(79,70,229,.1),0 0 0 1px rgba(79,70,229,.05);
+  --st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;background:var(--bg);color:var(--t);-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{display:none} *{scrollbar-width:none}
+
+/* ── SETUP OVERLAY ──────────────────────────────────────── */
+#setupOvl{position:fixed;inset:0;background:linear-gradient(150deg,#4F46E5,#7C3AED);z-index:1000;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(var(--st) + 20px) 20px calc(20px + var(--sb));display:none;align-items:flex-start;justify-content:center}
+#setupOvl.open{display:flex}
+.setup-card{background:#fff;border-radius:24px;padding:28px 22px;width:100%;max-width:480px;margin:auto}
+.setup-logo{text-align:center;margin-bottom:20px}
+.setup-logo-ico{width:60px;height:60px;background:var(--p);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 10px}
+.setup-logo h1{font-size:18px;font-weight:800}
+.setup-logo p{font-size:12px;color:var(--t2);margin-top:3px}
+.setup-steps{margin:16px 0}
+.step{display:flex;gap:12px;margin-bottom:16px;align-items:flex-start}
+.step-num{width:26px;height:26px;background:var(--p);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0;margin-top:1px}
+.step-body h3{font-size:14px;font-weight:700;margin-bottom:3px}
+.step-body p{font-size:12px;color:var(--t2);line-height:1.55}
+.step-body a{color:var(--p);text-decoration:none;font-weight:600}
+.step-body code{background:#F3F4F6;padding:2px 6px;border-radius:5px;font-size:11px;font-family:monospace}
+.setup-divider{height:1px;background:var(--b);margin:18px 0}
+.setup-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--t2);display:block;margin-bottom:6px}
+.setup-ta{width:100%;min-height:130px;padding:11px 13px;border:1.5px solid var(--b);border-radius:11px;font-size:12px;font-family:monospace;color:var(--t);background:#F9FAFB;outline:none;resize:none;-webkit-appearance:none}
+.setup-ta:focus{border-color:var(--p);background:#fff}
+.setup-err{color:var(--ng);font-size:12px;margin-top:6px;min-height:16px}
+.setup-btn{width:100%;padding:13px;background:var(--p);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:10px;-webkit-tap-highlight-color:transparent}
+.setup-hint{font-size:11px;color:var(--t2);text-align:center;margin-top:12px;line-height:1.6}
+
+/* ── LOADING OVERLAY ────────────────────────────────────── */
+#loadOvl{position:fixed;inset:0;background:rgba(255,255,255,.85);z-index:900;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;backdrop-filter:blur(4px)}
+#loadOvl.open{display:flex}
+.spin{width:36px;height:36px;border:3px solid var(--b);border-top-color:var(--p);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-text{font-size:14px;font-weight:600;color:var(--t2)}
+
+/* ── LOGIN ─────────────────────────────────────────────── */
+#loginScreen{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(150deg,#4F46E5 0%,#7C3AED 100%);padding:24px 24px calc(24px + var(--sb));padding-top:calc(24px + var(--st))}
+.lcard{background:#fff;border-radius:24px;padding:28px 22px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.llogo{text-align:center;margin-bottom:22px}
+.llogo-icon{width:64px;height:64px;background:var(--p);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 10px}
+.llogo h1{font-size:19px;font-weight:800}
+.llogo p{font-size:12px;color:var(--t2);margin-top:3px}
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px}
+.rbtn{padding:10px 6px;border:2px solid var(--b);border-radius:11px;background:#fff;font-size:11px;font-weight:700;color:var(--t2);cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent;transition:all .15s;line-height:1.4;font-family:inherit}
+.rbtn.sel{border-color:var(--p);background:#EEF2FF;color:var(--p)}
+.lin{width:100%;padding:13px 14px;border:2px solid var(--b);border-radius:12px;font-size:16px;color:var(--t);background:#fff;outline:none;margin-bottom:10px;font-family:inherit;-webkit-appearance:none}
+.lin:focus{border-color:var(--p)}
+.lerr{color:var(--ng);font-size:12px;text-align:center;min-height:16px;margin-bottom:8px}
+.lbtn{width:100%;padding:14px;background:var(--p);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.ios-hint{margin-top:14px;text-align:center;font-size:11px;color:rgba(255,255,255,.75);line-height:1.6}
+.reset-link{text-align:center;margin-top:12px}
+.reset-link button{background:none;border:none;color:rgba(255,255,255,.5);font-size:11px;cursor:pointer;text-decoration:underline;font-family:inherit}
+
+/* ── APP SHELL ──────────────────────────────────────────── */
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+.hdr{background:var(--p);color:#fff;padding:calc(var(--st) + 10px) 16px 10px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.hdr-l h1{font-size:16px;font-weight:800;letter-spacing:.3px}
+.rbadge{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.2);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;margin-top:3px}
+.hdr-r{display:flex;gap:7px}
+.hbtn{width:36px;height:36px;background:rgba(255,255,255,.2);border:none;border-radius:50%;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+.syncing-dot{width:7px;height:7px;background:#FCD34D;border-radius:50%;display:inline-block;margin-left:6px;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.ftabs{background:var(--p);padding:0 16px 10px;display:flex;gap:6px;flex-shrink:0}
+.ftab{flex:1;padding:7px 8px;background:rgba(255,255,255,.18);border:none;border-radius:20px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:inherit}
+.ftab.on{background:#fff;color:var(--p)}
+.sbar{padding:9px 16px;background:#fff;border-bottom:1px solid var(--b);flex-shrink:0}
+.swrap{position:relative}
+.swrap::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none}
+.sinp{width:100%;padding:9px 12px 9px 33px;border:1.5px solid var(--b);border-radius:20px;font-size:14px;color:var(--t);background:var(--bg);outline:none;font-family:inherit;-webkit-appearance:none}
+.sinp:focus{border-color:var(--p);background:#fff}
+.listwrap{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px calc(74px + var(--sb))}
+.empty{text-align:center;padding:56px 20px;color:var(--t2)}
+.empty-ico{font-size:52px;margin-bottom:10px}
+.empty h3{font-size:15px;font-weight:700;margin-bottom:5px}
+.empty p{font-size:13px}
+
+/* ── CARD ───────────────────────────────────────────────── */
+.pcard{background:#fff;border-radius:16px;padding:12px;margin-bottom:9px;box-shadow:var(--sh);display:flex;gap:11px;cursor:pointer;position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform .1s}
+.pcard:active{transform:scale(0.98)}
+.pcard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px}
+.pcard.s-unreturned::before{background:var(--warn)}
+.pcard.s-overdue::before{background:var(--ng)}
+.pcard.s-returned::before{background:var(--ok)}
+.pcard.s-none::before{background:var(--p)}
+.pcard.is-delivered{opacity:.45}
+.pcard.is-delivered::before{background:#9CA3AF!important}
+.cthumb{width:62px;height:62px;border-radius:10px;object-fit:cover;flex-shrink:0;background:var(--bg)}
+.cnophoto{width:62px;height:62px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0}
+.cbody{flex:1;min-width:0}
+.cname{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+.cmeta{font-size:12px;color:var(--t2);line-height:1.55;margin-bottom:3px}
+.chip{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700}
+.chip-u{background:#FEF3C7;color:#92400E}
+.chip-o{background:#FEE2E2;color:#991B1B}
+.chip-r{background:#D1FAE5;color:#065F46}
+.chip-del{background:#DBEAFE;color:#1E40AF}
+.qbtn{position:absolute;right:9px;bottom:9px;padding:4px 9px;border:none;border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:inherit;background:#FEF3C7;color:#92400E}
+
+/* ── FAB ────────────────────────────────────────────────── */
+.fab{position:fixed;bottom:calc(18px + var(--sb));right:18px;width:52px;height:52px;background:var(--p);color:#fff;border:none;border-radius:50%;font-size:24px;cursor:pointer;box-shadow:0 4px 16px rgba(79,70,229,.42);display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:transform .15s;z-index:10}
+.fab:active{transform:scale(.9)}
+
+/* ── MODALS ─────────────────────────────────────────────── */
+.ovl{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;align-items:flex-end;backdrop-filter:blur(3px)}
+.ovl.open{display:flex}
+.sheet{background:#fff;border-radius:22px 22px 0 0;width:100%;max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 20px calc(20px + var(--sb));animation:slideUp .26s cubic-bezier(.33,1,.68,1)}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.shdl{width:36px;height:4px;background:var(--b);border-radius:2px;margin:0 auto 14px}
+.shtitle{font-size:17px;font-weight:800;margin-bottom:16px;text-align:center}
+
+/* ── FORM ───────────────────────────────────────────────── */
+.fg{margin-bottom:13px}
+.fl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--t2);display:block;margin-bottom:5px}
+.fi{width:100%;padding:11px 13px;border:1.5px solid var(--b);border-radius:11px;font-size:15px;color:var(--t);background:var(--bg);outline:none;-webkit-appearance:none;font-family:inherit}
+.fi:focus{border-color:var(--p);background:#fff}
+textarea.fi{min-height:66px;resize:none}
+.photoarea{display:flex;gap:7px;flex-wrap:wrap;padding:9px;background:var(--bg);border:1.5px dashed var(--b);border-radius:11px}
+.ptwrap{position:relative;width:68px;height:68px}
+.pthumb{width:68px;height:68px;border-radius:8px;object-fit:cover;cursor:pointer}
+.pdel{position:absolute;top:-5px;right:-5px;width:20px;height:20px;background:var(--ng);color:#fff;border:2px solid #fff;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;z-index:1}
+.paddlbl{width:68px;height:68px;border-radius:8px;border:2px dashed #CBD5E1;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:3px;font-size:11px;color:var(--t2);position:relative}
+.paddlbl input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.paddlbl-ico{font-size:20px}
+.stgl{display:flex;gap:8px}
+.stbtn{flex:1;padding:10px;border:2px solid var(--b);border-radius:11px;background:#fff;font-size:13px;font-weight:700;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent;font-family:inherit;transition:all .15s}
+.stbtn.on-u{border-color:var(--warn);background:#FEF3C7;color:#92400E}
+.stbtn.on-r{border-color:var(--ok);background:#D1FAE5;color:#065F46}
+
+/* ── BUTTONS ────────────────────────────────────────────── */
+.btn{width:100%;padding:13px;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:inherit;transition:opacity .15s}
+.btn:active{opacity:.8}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-p{background:var(--p);color:#fff}
+.btn-g{background:var(--bg);color:var(--t)}
+.btn-ng{background:var(--ng);color:#fff}
+.btn-ok{background:var(--ok);color:#fff}
+.btn-line{background:#06C755;color:#fff}
+.btn-slack{background:#4A154B;color:#fff}
+.brow{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.bstack{display:flex;flex-direction:column;gap:8px}
+
+/* ── DETAIL ─────────────────────────────────────────────── */
+.dphotos{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:14px;padding-bottom:4px}
+.dphoto{width:190px;height:152px;border-radius:12px;object-fit:cover;flex-shrink:0;cursor:pointer}
+.dhdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:11px}
+.dname{font-size:20px;font-weight:800;max-width:62%}
+.drow{display:flex;justify-content:space-between;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--b);font-size:14px}
+.drow:last-of-type{border-bottom:none}
+.dlabel{color:var(--t2);font-weight:500;flex-shrink:0;margin-right:8px}
+.dval{font-weight:600;text-align:right;word-break:break-all}
+.memobox{font-size:13px;color:var(--t2);line-height:1.65;margin-bottom:13px;padding:10px;background:var(--bg);border-radius:10px;word-break:break-all}
+.sdivider{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--t2);margin:14px 0 8px}
+
+/* ── PHOTO VIEWER ───────────────────────────────────────── */
+#pvOverlay{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:400;display:none;flex-direction:column;align-items:center;justify-content:center}
+#pvOverlay.open{display:flex}
+#pvImg{max-width:100%;max-height:78vh;object-fit:contain}
+.pvclose{position:absolute;top:calc(var(--st) + 12px);right:14px;color:#fff;font-size:20px;cursor:pointer;background:rgba(255,255,255,.15);border:none;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center}
+.pvnav{display:flex;gap:14px;margin-top:14px}
+.pvbtn{background:rgba(255,255,255,.2);border:none;color:#fff;font-size:20px;width:44px;height:44px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.pvbtn:disabled{opacity:.25}
+.pvcount{color:rgba(255,255,255,.6);font-size:12px;margin-top:7px}
+
+/* ── CONFIRM ────────────────────────────────────────────── */
+#confirmOvl{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)}
+#confirmOvl.open{display:flex}
+.cbox{background:#fff;border-radius:20px;padding:24px 20px;width:100%;max-width:300px;animation:popIn .2s cubic-bezier(.34,1.56,.64,1)}
+@keyframes popIn{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+.ctitle{font-size:16px;font-weight:800;text-align:center;margin-bottom:7px}
+.cmsg{font-size:13px;color:var(--t2);text-align:center;margin-bottom:18px}
+
+/* ── PC表示: スマホサイズに制限 ─────────────────────────── */
+@media (min-width: 480px) {
+  body { background:#1E1B4B; display:flex; justify-content:center; }
+  #loginScreen, #app { max-width:430px; width:100%; box-shadow:0 0 60px rgba(0,0,0,.5); }
+  .ovl, #pvOverlay, #loadOvl, #setupOvl { left:calc(50% - 215px); right:calc(50% - 215px); }
+  .fab { right:calc(50% - 197px); }
+}
+
+/* ── TOAST ──────────────────────────────────────────────── */
+#toast{position:fixed;bottom:calc(74px + var(--sb));left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,20,40,.9);color:#fff;padding:9px 18px;border-radius:20px;font-size:13px;font-weight:500;opacity:0;transition:all .25s;z-index:500;white-space:nowrap;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ══ SETUP OVERLAY ══════════════════════════════════════ -->
+<div id="setupOvl">
+  <div class="setup-card">
+    <div class="setup-logo">
+      <div class="setup-logo-ico">🔥</div>
+      <h1>Firebase 初期設定</h1>
+      <p>チームでデータを共有するための設定です</p>
+    </div>
+
+    <div class="setup-steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Firebase プロジェクトを作成</h3>
+          <p><a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> を開いて「プロジェクトを追加」→ 名前を入力して作成</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Firestore Database を有効化</h3>
+          <p>左メニュー「Firestore Database」→「データベースの作成」→「テストモードで開始」→ロケーションは <code>asia-northeast1</code>（東京）を選択</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>設定コードを取得</h3>
+          <p>⚙️ プロジェクトの設定 →「マイアプリ」→ <code>&lt;/&gt;</code>（ウェブ）→ アプリ名を入力して登録 →「firebaseConfig」のコードをコピー</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h3>コードを下に貼り付けて保存</h3>
+          <p>コピーした <code>const firebaseConfig = { ... }</code> の部分をそのまま貼り付けてください</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="setup-divider"></div>
+
+    <label class="setup-label">Firebase 設定コードを貼り付け</label>
+    <textarea id="configInput" class="setup-ta" placeholder="const firebaseConfig = {&#10;  apiKey: &quot;...&quot;,&#10;  authDomain: &quot;...&quot;,&#10;  projectId: &quot;...&quot;,&#10;  ...&#10;};" spellcheck="false"></textarea>
+    <div class="setup-err" id="setupErr"></div>
+    <button class="setup-btn" onclick="applyConfig()">保存して開始 →</button>
+    <div class="setup-hint">
+      設定は端末に保存されます。チームの全員がこの手順を行ってください。<br>
+      GitHub Pages に公開すると URL をチームで共有できます。
+    </div>
+  </div>
+</div>
+
+<!-- ══ LOADING ════════════════════════════════════════════ -->
+<div id="loadOvl">
+  <div class="spin"></div>
+  <div class="load-text">接続中...</div>
+</div>
+
+<!-- ══ LOGIN ══════════════════════════════════════════════ -->
+<div id="loginScreen" style="display:none">
+  <div class="lcard">
+    <div class="llogo">
+      <div class="llogo-icon">👔</div>
+      <h1>商品サンプル管理</h1>
+      <p>役割を選んでログイン</p>
+    </div>
+    <div class="role-grid" id="roleGrid"></div>
+    <input type="password" class="lin" id="lpw" placeholder="パスワードを入力" autocomplete="current-password">
+    <div class="lerr" id="lerr"></div>
+    <button class="lbtn" onclick="doLogin()">ログイン</button>
+  </div>
+  <div class="ios-hint" id="iosHint" style="display:none">
+    📲 Safari の「共有」→「ホーム画面に追加」でアプリとして使えます
+  </div>
+  <div class="reset-link">
+    <button onclick="resetConfig()">Firebase 設定を変更</button>
+  </div>
+</div>
+
+<!-- ══ APP ════════════════════════════════════════════════ -->
+<div id="app" style="display:none">
+  <div class="hdr">
+    <div class="hdr-l">
+      <h1>👔 商品サンプル管理 <span class="syncing-dot" id="syncDot" style="display:none"></span></h1>
+      <div class="rbadge" id="rbadge"></div>
+    </div>
+    <div class="hdr-r">
+      <button class="hbtn" onclick="openAdd()" title="追加">＋</button>
+      <button class="hbtn" onclick="doLogout()" title="ログアウト">⏻</button>
+    </div>
+  </div>
+  <div class="ftabs" id="ftabs" style="display:none">
+    <button class="ftab on" id="ft-all" onclick="setFilter('all')">すべて</button>
+    <button class="ftab" id="ft-un" onclick="setFilter('un')">未返却</button>
+    <button class="ftab" id="ft-ret" onclick="setFilter('ret')">返却済み</button>
+  </div>
+  <div class="sbar">
+    <div class="swrap">
+      <input type="search" class="sinp" id="sinp" placeholder="商品名で検索..." oninput="renderList()">
+    </div>
+  </div>
+  <div class="listwrap" id="listwrap"></div>
+  <button class="fab" onclick="openAdd()">＋</button>
+</div>
+
+<!-- ══ ADD/EDIT MODAL ════════════════════════════════════ -->
+<div class="ovl" id="addOvl">
+  <div class="sheet">
+    <div class="shdl"></div>
+    <div class="shtitle" id="addTitle">商品を追加</div>
+    <form id="itemForm" onsubmit="saveItem(event)">
+      <input type="hidden" id="fid">
+      <div id="formFields"></div>
+      <div class="brow" style="margin-top:8px">
+        <button type="button" class="btn btn-g" onclick="closeOvl('addOvl')">キャンセル</button>
+        <button type="submit" class="btn btn-p" id="saveBtn">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══ DETAIL MODAL ══════════════════════════════════════ -->
+<div class="ovl" id="detOvl">
+  <div class="sheet">
+    <div class="shdl"></div>
+    <div id="detContent"></div>
+  </div>
+</div>
+
+<!-- ══ PHOTO VIEWER ══════════════════════════════════════ -->
+<div id="pvOverlay">
+  <button class="pvclose" onclick="closePV()">✕</button>
+  <img id="pvImg" src="" alt="">
+  <div class="pvnav">
+    <button class="pvbtn" id="pvPrev" onclick="pvGo(-1)">‹</button>
+    <button class="pvbtn" id="pvNext" onclick="pvGo(1)">›</button>
+  </div>
+  <div class="pvcount" id="pvCount"></div>
+</div>
+
+<!-- ══ CONFIRM ═══════════════════════════════════════════ -->
+<div id="confirmOvl">
+  <div class="cbox">
+    <div class="ctitle" id="ctitle">確認</div>
+    <div class="cmsg" id="cmsg"></div>
+    <div class="brow">
+      <button class="btn btn-g" onclick="closeConfirm()">キャンセル</button>
+      <button class="btn btn-ng" id="cokBtn" onclick="runConfirm()">実行</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+/* ══ CONFIG ═══════════════════════════════════════════════ */
+const ROLES = {
+  admin:      {label:'管理者',           pw:'admin1234',  icon:'👑'},
+  sample_oem: {label:'サンプル/OEM担当', pw:'sample1234', icon:'📦'},
+  photo_sales:{label:'撮影/営業担当',    pw:'photo1234',  icon:'📷'},
+};
+const ROLE_FIELDS = {
+  admin:      ['name','photos','memo','sample_round','negotiation_date','borrow_date','expected_return_date','return_date','return_status','delivery_date','supplier_requested','photo_sample_delivery_date','revision_sample_date','shoot_date','sale_date','cost_price','retail_price'],
+  sample_oem: ['name','photos','memo','sample_round','negotiation_date','borrow_date','expected_return_date','return_date','return_status','delivery_date','supplier_requested','photo_sample_delivery_date','revision_sample_date'],
+  photo_sales:['name','photos','memo','supplier_requested','photo_sample_delivery_date','shoot_date','cost_price','retail_price','sale_date'],
+
+};
+const FM = {
+  name:                       {lbl:'商品名',               t:'text',          req:true},
+  photos:                     {lbl:'写真',                 t:'photos'},
+  memo:                       {lbl:'メモ',                 t:'textarea'},
+  sample_round:               {lbl:'サンプル回数',         t:'number'},
+  negotiation_date:           {lbl:'商談日',               t:'date'},
+  borrow_date:                {lbl:'サンプル借用日時',     t:'datetime-local'},
+  expected_return_date:       {lbl:'返却予定日時',         t:'datetime-local'},
+  return_date:                {lbl:'返却日時',             t:'datetime-local'},
+  return_status:              {lbl:'返却ステータス',       t:'status'},
+  delivery_date:              {lbl:'納品日',               t:'date'},
+  supplier_requested:            {lbl:'取引先への依頼',        t:'photo_req'},
+  photo_sample_delivery_date: {lbl:'撮影用サンプル納品日', t:'date'},
+  revision_sample_date:       {lbl:'修正サンプル到着日',   t:'date'},
+  shoot_date:                 {lbl:'撮影日',               t:'date'},
+  sale_date:                  {lbl:'販売日',               t:'date'},
+  cost_price:                 {lbl:'仕入れ値',             t:'price'},
+  retail_price:               {lbl:'上代（定価）',         t:'price'},
+};
+const SESS = 'smp_sess_v1';
+const CFG_KEY = 'smp_firebase_cfg_v1';
+
+/* ══ STATE ════════════════════════════════════════════════ */
+let db = null, unsubscribe = null;
+let role = null, items = [], filter = 'all';
+let editPhotos = [], detailId = null;
+let confirmCb = null, pvPhotos = [], pvIdx = 0, selRole = null;
+
+/* ══ FIREBASE CONFIG ══════════════════════════════════════ */
+function loadStoredConfig() {
+  try { return JSON.parse(localStorage.getItem(CFG_KEY)); } catch { return null; }
+}
+
+function parseFirebaseConfig(text) {
+  // Accept raw JS object or JSON
+  const m = text.match(/\{[\s\S]*apiKey[\s\S]*\}/);
+  if (!m) throw new Error('設定が見つかりません');
+  let s = m[0]
+    .replace(/\/\/.*/g, '')              // strip comments
+    .replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":')  // quote keys
+    .replace(/:\s*'([^']*)'/g, ':"$1"') // single → double quotes
+    .replace(/,\s*}/g, '}');            // trailing commas
+  const cfg = JSON.parse(s);
+  if (!cfg.apiKey || !cfg.projectId) throw new Error('apiKey または projectId がありません');
+  return cfg;
+}
+
+function applyConfig() {
+  const text = document.getElementById('configInput').value.trim();
+  const errEl = document.getElementById('setupErr');
+  errEl.textContent = '';
+  try {
+    const cfg = parseFirebaseConfig(text);
+    localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+    startApp(cfg);
+  } catch(e) {
+    errEl.textContent = '⚠ ' + e.message + '。Firebaseの設定コードをそのまま貼り付けてください。';
+  }
+}
+
+function resetConfig() {
+  if (!confirm('Firebase の設定を削除して設定画面に戻りますか？')) return;
+  localStorage.removeItem(CFG_KEY);
+  clearSess();
+  location.reload();
+}
+
+/* ══ FIREBASE INIT ════════════════════════════════════════ */
+function startApp(cfg) {
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(cfg);
+    db = firebase.firestore();
+    db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+  } catch(e) {
+    document.getElementById('setupErr').textContent = '⚠ Firebase の初期化に失敗しました: ' + e.message;
+    return;
+  }
+  document.getElementById('setupOvl').classList.remove('open');
+  // Check existing session
+  const saved = loadSess();
+  if (saved) { selRole = saved; activate(saved); }
+  else showLogin();
+}
+
+/* ══ FIRESTORE DATA LAYER ═════════════════════════════════ */
+function startSync() {
+  if (unsubscribe) unsubscribe();
+  showLoad(true);
+  unsubscribe = db.collection('items').onSnapshot(snapshot => {
+    items = snapshot.docs.map(d => ({...d.data(), id:d.id}));
+    showLoad(false);
+    renderList();
+    // Refresh detail if open
+    if (detailId && document.getElementById('detOvl').classList.contains('open')) {
+      const it = items.find(i=>i.id===detailId);
+      if (it) renderDetailContent(it);
+    }
+  }, err => {
+    showLoad(false);
+    toast('⚠ 接続エラー: ' + err.message);
+  });
+}
+
+function stopSync() { if (unsubscribe) { unsubscribe(); unsubscribe = null; } }
+
+async function storeItem(item) {
+  await db.collection('items').doc(item.id).set(item);
+}
+
+async function removeItem(id) {
+  await db.collection('items').doc(id).delete();
+}
+
+function showLoad(v) { document.getElementById('loadOvl').classList.toggle('open', v); }
+function showSync(v) { document.getElementById('syncDot').style.display = v ? 'inline-block' : 'none'; }
+
+/* ══ SESSION (localStorage — device-specific) ════════════ */
+const loadSess = () => { try { const s=JSON.parse(localStorage.getItem(SESS)); if(s?.role&&s.exp>Date.now()) return s.role; } catch{} return null; };
+const saveSess = r => localStorage.setItem(SESS, JSON.stringify({role:r, exp:Date.now()+365*24*60*60*1000}));
+const clearSess = () => localStorage.removeItem(SESS);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+
+/* ══ HELPERS ══════════════════════════════════════════════ */
+const see = f => ROLE_FIELDS[role].includes(f);
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function fmtDate(s) {
+  if (!s) return '---';
+  const d=new Date(s), Y=d.getFullYear(), M=d.getMonth()+1, D=d.getDate();
+  if (s.length<=10) return `${Y}/${M}/${D}`;
+  return `${Y}/${M}/${D} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+const fmtPrice = n => (n==null||n==='') ? '---' : '¥'+Number(n).toLocaleString('ja-JP');
+function getStatus(it) {
+  if (!see('return_status')) return 'none';
+  if (it.return_status==='returned') return 'returned';
+  if (it.expected_return_date && new Date(it.expected_return_date)<new Date()) return 'overdue';
+  return 'unreturned';
+}
+
+/* ══ AUTH ═════════════════════════════════════════════════ */
+function showLogin() {
+  buildRoleGrid();
+  document.getElementById('loginScreen').style.display = 'flex';
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (isIOS && !window.navigator.standalone)
+    document.getElementById('iosHint').style.display = 'block';
+}
+
+function buildRoleGrid() {
+  document.getElementById('roleGrid').innerHTML = Object.entries(ROLES).map(([k,r]) =>
+    `<button type="button" class="rbtn" data-r="${k}" onclick="pickRole('${k}')">${r.icon}<br>${r.label}</button>`
+  ).join('');
+}
+
+function pickRole(k) {
+  selRole = k;
+  document.querySelectorAll('.rbtn').forEach(b => b.classList.toggle('sel', b.dataset.r===k));
+  document.getElementById('lpw').focus();
+}
+
+function doLogin() {
+  if (!selRole) { showErr('役割を選択してください'); return; }
+  if (document.getElementById('lpw').value !== ROLES[selRole].pw) { showErr('パスワードが違います'); return; }
+  activate(selRole);
+}
+
+function showErr(m) {
+  const el = document.getElementById('lerr');
+  el.textContent = m;
+  setTimeout(()=>el.textContent='', 2400);
+}
+
+function activate(r) {
+  role = r; saveSess(r);
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('lpw').value = '';
+  document.getElementById('rbadge').textContent = `${ROLES[r].icon} ${ROLES[r].label}`;
+  buildTabs(r);
+  startSync();
+}
+
+function buildTabs(r) {
+  const tabs = [['all','すべて']];
+  if (ROLE_FIELDS[r].includes('return_status')) tabs.push(['un','未返却'],['ret','返却済み']);
+  if (ROLE_FIELDS[r].includes('delivery_date')) tabs.push(['undel','未納品'],['del','納品済み']);
+  const el = document.getElementById('ftabs');
+  if (tabs.length <= 1) { el.style.display='none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = tabs.map(([id,lbl]) =>
+    `<button class="ftab ${id==='all'?'on':''}" id="ft-${id}" onclick="setFilter('${id}')">${lbl}</button>`
+  ).join('');
+}
+
+function doLogout() {
+  stopSync(); clearSess();
+  role = null; selRole = null; filter = 'all'; items = [];
+  document.querySelectorAll('.rbtn').forEach(b=>b.classList.remove('sel'));
+  document.getElementById('app').style.display = 'none';
+  showLogin();
+}
+
+/* ══ LIST ═════════════════════════════════════════════════ */
+function setFilter(f) {
+  filter = f;
+  document.querySelectorAll('.ftab').forEach(b => b.classList.remove('on'));
+  const tab = document.getElementById(`ft-${f}`);
+  if (tab) tab.classList.add('on');
+  renderList();
+}
+
+function renderList() {
+  const q = document.getElementById('sinp').value.trim().toLowerCase();
+  let list = items.filter(it => {
+    if (q && !it.name.toLowerCase().includes(q)) return false;
+    if (filter==='un')    return getStatus(it)!=='returned';
+    if (filter==='ret')   return getStatus(it)==='returned';
+    if (filter==='del')   return !!it.delivered;
+    if (filter==='undel') return !it.delivered;
+    return true;
+  });
+
+  list.sort((a,b) => {
+    // 納品済みは常に下
+    const da=a.delivered?1:0, db=b.delivered?1:0;
+    if (da!==db) return da-db;
+
+    // 販売日順（近い順）
+    if (see('sale_date')) {
+      const sa=a.sale_date||'', sb=b.sale_date||'';
+      if (sa&&sb) return new Date(sa)-new Date(sb);
+      if (sa) return -1; if (sb) return 1;
+    }
+    // 納品日順（近い順）
+    if (see('delivery_date') && !a.delivered && !b.delivered) {
+      const xa=a.delivery_date||'', xb=b.delivery_date||'';
+      if (xa&&xb) return new Date(xa)-new Date(xb);
+      if (xa) return -1; if (xb) return 1;
+    }
+    // 返却ステータス
+    const ord={overdue:0,unreturned:1,none:1,returned:2};
+    const oa=ord[getStatus(a)], ob=ord[getStatus(b)];
+    if (oa!==ob) return oa-ob;
+    return (a.expected_return_date||a.borrow_date||a.created_at||'')
+      .localeCompare(b.expected_return_date||b.borrow_date||b.created_at||'');
+  });
+
+  const wrap = document.getElementById('listwrap');
+  if (!list.length) {
+    wrap.innerHTML = `<div class="empty"><div class="empty-ico">📭</div><h3>${q?'検索結果なし':'アイテムなし'}</h3><p>${q?'別のキーワードで検索':'＋ボタンで追加してください'}</p></div>`;
+    return;
+  }
+  wrap.innerHTML = list.map(renderCard).join('');
+}
+
+function renderCard(it) {
+  const st = getStatus(it);
+  const thumb = it.photos?.length
+    ? `<img class="cthumb" src="${it.photos[0]}" loading="lazy" alt="">`
+    : `<div class="cnophoto">👔</div>`;
+  let badge='', meta='', qbtn='';
+  if (see('sample_round') && it.sample_round) {
+    badge += `<span class="chip" style="background:#F3E8FF;color:#6D28D9">第${it.sample_round}回</span>`;
+  }
+  if (see('return_status')) {
+    if (st==='returned') badge=`<span class="chip chip-r">✓ 返却済み</span>`;
+    else if (st==='overdue') badge=`<span class="chip chip-o">⚠ 期限超過</span>`;
+    else {
+      badge=`<span class="chip chip-u">◯ 未返却</span>`;
+      qbtn=`<button class="qbtn" onclick="quickRet(event,'${it.id}')">返却▶</button>`;
+    }
+    if (it.expected_return_date && st!=='returned') meta+=`返却予定: ${fmtDate(it.expected_return_date)}<br>`;
+    if (it.return_date && st==='returned') meta+=`返却日: ${fmtDate(it.return_date)}<br>`;
+  }
+  if (see('supplier_requested')) {
+    if (it.supplier_requested==='requested') {
+      badge += `<span class="chip" style="background:#D1FAE5;color:#065F46">✅ 依頼済み</span>`;
+    } else {
+      badge += `<span class="chip" style="background:#FEE2E2;color:#991B1B">💬 未依頼</span>`;
+    }
+  }
+  if (see('photo_sample_delivery_date') && it.photo_sample_delivery_date) {
+    const diff = Math.ceil((new Date(it.photo_sample_delivery_date)-new Date())/(1000*60*60*24));
+    const color = diff<0?'#EF4444':diff<=7?'#D97706':'#6B7280';
+    const label = diff<0?`${Math.abs(diff)}日超過`:diff===0?'今日到着':`${diff}日後到着`;
+    meta+=`<span style="color:${color};font-weight:700">📷 撮影用: ${label}（${fmtDate(it.photo_sample_delivery_date)}）</span><br>`;
+  }
+  if (see('shoot_date') && it.shoot_date) meta+=`撮影日: ${fmtDate(it.shoot_date)}<br>`;
+  if (see('delivery_date') && it.delivery_date) {
+    if (it.delivered) {
+      badge += `<span class="chip chip-del">📦 納品済み</span>`;
+    } else {
+      const diff = Math.ceil((new Date(it.delivery_date)-new Date())/(1000*60*60*24));
+      const color = diff<0?'#EF4444':diff<=7?'#D97706':'#6B7280';
+      const label = diff<0?`${Math.abs(diff)}日超過`:diff===0?'今日納品':`${diff}日後納品`;
+      meta+=`<span style="color:${color};font-weight:700">📦 ${label}（${fmtDate(it.delivery_date)}）</span><br>`;
+      if (!it.delivered) qbtn+=`<button class="qbtn" style="bottom:${qbtn?'34px':'9px'};background:#DBEAFE;color:#1E40AF" onclick="quickDeliver(event,'${it.id}')">納品済▶</button>`;
+    }
+  }
+  if (see('sale_date') && it.sale_date) meta+=`販売日: ${fmtDate(it.sale_date)}<br>`;
+  if (see('cost_price') && it.cost_price) meta+=`仕入: ${fmtPrice(it.cost_price)}　上代: ${fmtPrice(it.retail_price)}<br>`;
+  return `<div class="pcard s-${st}${it.delivered?' is-delivered':''}" onclick="openDetail('${it.id}')">
+    ${thumb}
+    <div class="cbody">
+      <div class="cname">${esc(it.name)}</div>
+      ${badge?`<div style="margin-bottom:3px;display:flex;gap:4px;flex-wrap:wrap">${badge}</div>`:''}
+      ${meta?`<div class="cmeta">${meta}</div>`:''}
+    </div>${qbtn}
+  </div>`;
+}
+
+/* ══ QUICK DELIVER ════════════════════════════════════════ */
+async function quickDeliver(e, id) {
+  e.stopPropagation();
+  const it = items.find(i=>i.id===id); if(!it) return;
+  const updated = {...it, delivered:true, delivered_at:new Date().toISOString()};
+  const idx = items.findIndex(i=>i.id===id);
+  if (idx>=0) items[idx]=updated;
+  renderList(); toast('📦 納品済みにしました');
+  try { showSync(true); await storeItem(updated); } catch { toast('⚠ 同期エラー'); } finally { showSync(false); }
+}
+
+/* ══ QUICK RETURN ═════════════════════════════════════════ */
+async function quickRet(e, id) {
+  e.stopPropagation();
+  const it = items.find(i=>i.id===id); if(!it) return;
+  const updated = {...it, return_status:'returned', return_date:it.return_date||new Date().toISOString().slice(0,16)};
+  const idx = items.findIndex(i=>i.id===id);
+  if (idx>=0) items[idx]=updated; // optimistic
+  renderList(); toast('✓ 返却済みにしました');
+  try { showSync(true); await storeItem(updated); } catch { toast('⚠ 同期エラー'); } finally { showSync(false); }
+}
+
+/* ══ ADD/EDIT ═════════════════════════════════════════════ */
+function openAdd(id=null) {
+  editPhotos = [];
+  const it = id ? items.find(i=>i.id===id) : null;
+  document.getElementById('addTitle').textContent = it ? '商品を編集' : '商品を追加';
+  document.getElementById('saveBtn').textContent = it ? '更新' : '保存';
+  document.getElementById('fid').value = id||'';
+  if (it?.photos) editPhotos = [...it.photos];
+  renderFormFields(it);
+  openOvl('addOvl');
+  setTimeout(()=>document.getElementById('fname')?.focus(), 350);
+}
+
+function renderFormFields(it) {
+  document.getElementById('formFields').innerHTML = ROLE_FIELDS[role].map(k=>buildField(k,it)).join('');
+  renderPhotoThumbs();
+}
+
+function buildField(k, it) {
+  const m=FM[k], v=it?(it[k]??''):'';
+  if (k==='photos') return `<div class="fg"><label class="fl">${m.lbl}</label><div class="photoarea" id="photoArea"></div></div>`;
+  if (k==='return_status') {
+    const r=v==='returned';
+    return `<div class="fg"><label class="fl">${m.lbl}</label>
+      <div class="stgl">
+        <button type="button" class="stbtn ${r?'':'on-u'}" id="stU" onclick="setSt('unreturned')">◯ 未返却</button>
+        <button type="button" class="stbtn ${r?'on-r':''}" id="stR" onclick="setSt('returned')">✓ 返却済み</button>
+      </div>
+      <input type="hidden" id="freturn_status" value="${r?'returned':'unreturned'}">
+    </div>`;
+  }
+  if (m.t==='textarea') return `<div class="fg"><label class="fl">${m.lbl}</label><textarea class="fi" id="f${k}">${esc(v)}</textarea></div>`;
+  if (m.t==='price') return `<div class="fg"><label class="fl">${m.lbl}</label><input type="number" class="fi" id="f${k}" value="${v||''}" min="0" placeholder="例: 3000" inputmode="numeric"></div>`;
+  if (m.t==='number') return `<div class="fg"><label class="fl">${m.lbl}</label><input type="number" class="fi" id="f${k}" value="${v||''}" min="1" placeholder="例: 1（1回目）" inputmode="numeric"></div>`;
+  if (m.t==='photo_req') {
+    const done = v==='requested';
+    return `<div class="fg"><label class="fl">${m.lbl}</label>
+      <div class="stgl">
+        <button type="button" class="stbtn ${done?'':'on-u'}" id="pr-un" onclick="setPhotoReq('unrequested')">💬 未依頼</button>
+        <button type="button" class="stbtn ${done?'on-r':''}" id="pr-ok" onclick="setPhotoReq('requested')">✅ 依頼済み</button>
+      </div>
+      <input type="hidden" id="fsupplier_requested" value="${done?'requested':'unrequested'}">
+    </div>`;
+  }
+  return `<div class="fg"><label class="fl">${m.lbl}${m.req?' *':''}</label><input type="${m.t}" class="fi" id="f${k}" value="${esc(v)}"${m.req?' required':''}></div>`;
+}
+
+function setPhotoReq(v) {
+  document.getElementById('fsupplier_requested').value=v;
+  document.getElementById('pr-un').className=`stbtn ${v==='unrequested'?'on-u':''}`;
+  document.getElementById('pr-ok').className=`stbtn ${v==='requested'?'on-r':''}`;
+}
+
+function setSt(v) {
+  document.getElementById('freturn_status').value=v;
+  document.getElementById('stU').className=`stbtn ${v==='unreturned'?'on-u':''}`;
+  document.getElementById('stR').className=`stbtn ${v==='returned'?'on-r':''}`;
+}
+
+function renderPhotoThumbs() {
+  const a=document.getElementById('photoArea'); if(!a) return;
+  const thumbs=editPhotos.map((src,i)=>
+    `<div class="ptwrap"><img class="pthumb" src="${src}" onclick="pvEdit(${i})"><div class="pdel" onclick="delEditPhoto(${i})">×</div></div>`
+  ).join('');
+  const addBtn = editPhotos.length < 8
+    ? `<label class="paddlbl"><span class="paddlbl-ico">📷</span><span>追加</span><input type="file" accept="image/*" multiple onchange="addPhotos(event)"></label>`
+    : '';
+  a.innerHTML = thumbs + addBtn;
+}
+
+function delEditPhoto(i) { editPhotos.splice(i,1); renderPhotoThumbs(); }
+function pvEdit(i) { pvOpen(editPhotos,i); }
+
+async function addPhotos(e) {
+  for (const f of e.target.files) {
+    if (editPhotos.length>=8) { toast('写真は最大8枚です'); break; }
+    try { editPhotos.push(await compress(f,500,.65)); } catch {}
+  }
+  e.target.value=''; renderPhotoThumbs();
+}
+
+function compress(file,px,q) {
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(w>px||h>px){if(w>h){h=(h/w)*px;w=px;}else{w=(w/h)*px;h=px;}}
+        const c=document.createElement('canvas');
+        c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        res(c.toDataURL('image/jpeg',q));
+      };
+      img.onerror=rej; img.src=e.target.result;
+    };
+    r.onerror=rej; r.readAsDataURL(file);
+  });
+}
+
+async function saveItem(e) {
+  e.preventDefault();
+  const id=document.getElementById('fid').value;
+  const data={};
+  for (const k of ROLE_FIELDS[role]) {
+    if (k==='photos'){data.photos=[...editPhotos];continue;}
+    if (k==='return_status'){data.return_status=document.getElementById('freturn_status')?.value||'unreturned';continue;}
+    if (k==='supplier_requested'){data.supplier_requested=document.getElementById('fsupplier_requested')?.value||'unrequested';continue;}
+    const el=document.getElementById('f'+k);
+    if(el) data[k]=el.value.trim();
+  }
+  if(!data.name) return;
+  const btn=document.getElementById('saveBtn');
+  btn.disabled=true; btn.textContent='保存中...';
+  try {
+    const existing=id?items.find(x=>x.id===id):null;
+    const item=existing
+      ? {...existing,...data,updated_at:new Date().toISOString()}
+      : {id:uid(),return_status:'unreturned',...data,created_at:new Date().toISOString()};
+    await storeItem(item);
+    closeOvl('addOvl');
+    toast(id?'✓ 更新しました':'✓ 追加しました');
+  } catch(err) {
+    toast('⚠ 保存できませんでした');
+  } finally {
+    btn.disabled=false; btn.textContent=id?'更新':'保存';
+  }
+}
+
+/* ══ DETAIL ═══════════════════════════════════════════════ */
+function openDetail(id) {
+  detailId=id;
+  const it=items.find(i=>i.id===id); if(!it) return;
+  renderDetailContent(it);
+  openOvl('detOvl');
+}
+
+function renderDetailContent(it) {
+  const st=getStatus(it);
+  let h='';
+  if (see('photos')&&it.photos?.length)
+    h+=`<div class="dphotos">${it.photos.map((s,i)=>`<img class="dphoto" src="${s}" onclick="pvItem('${it.id}',${i})" loading="lazy">`).join('')}</div>`;
+
+  let chip='';
+  if(see('return_status')){
+    if(st==='returned') chip=`<span class="chip chip-r">✓ 返却済み</span>`;
+    else if(st==='overdue') chip=`<span class="chip chip-o">⚠ 期限超過</span>`;
+    else chip=`<span class="chip chip-u">◯ 未返却</span>`;
+  }
+  h+=`<div class="dhdr"><div class="dname">${esc(it.name)}</div>${chip}</div>`;
+  if(see('memo')&&it.memo) h+=`<div class="memobox">${esc(it.memo).replace(/\n/g,'<br>')}</div>`;
+
+  const keys=ROLE_FIELDS[role].filter(k=>!['name','photos','memo','return_status'].includes(k));
+  if(keys.length){
+    h+='<div class="sdivider">詳細情報</div>';
+    for(const k of keys){
+      const v=it[k]; if(!v&&v!==0) continue;
+      const m=FM[k];
+      const d=(m.t==='price')?fmtPrice(v):(m.t==='date'||m.t==='datetime-local')?fmtDate(v):esc(v);
+      const cls=(k==='expected_return_date'&&st==='overdue')?' style="color:var(--ng)"':'';
+      h+=`<div class="drow"><span class="dlabel">${m.lbl}</span><span class="dval"${cls}>${d}</span></div>`;
+    }
+  }
+  h+='<div class="sdivider">アクション</div><div class="bstack" style="margin-top:8px">';
+  if(see('supplier_requested')){
+    if(it.supplier_requested!=='requested')
+      h+=`<button class="btn" style="background:#7C3AED;color:#fff" onclick="markSupplierRequested('${it.id}')">💬 取引先に依頼済みにする</button>`;
+    else
+      h+=`<button class="btn btn-g" onclick="markSupplierUnrequested('${it.id}')">↩ 未依頼に戻す</button>`;
+  }
+  if(see('delivery_date')){
+    if(!it.delivered) h+=`<button class="btn" style="background:#2563EB;color:#fff" onclick="markDelivered('${it.id}')">📦 納品済みにする</button>`;
+    else h+=`<button class="btn btn-g" onclick="markUndelivered('${it.id}')">↩ 未納品に戻す</button>`;
+  }
+  if(see('return_status')){
+    if(st!=='returned') h+=`<button class="btn btn-ok" onclick="markRet('${it.id}')">✓ 返却済みにする</button>`;
+    else h+=`<button class="btn btn-g" onclick="markUnret('${it.id}')">↩ 未返却に戻す</button>`;
+  }
+  h+=`<div class="brow">
+    <button class="btn btn-line" onclick="shareLine('${it.id}')">🟢 LINE共有</button>
+    <button class="btn btn-slack" onclick="shareSlack('${it.id}')">💬 Slackコピー</button>
+  </div>
+  <button class="btn btn-g" onclick="editFromDet('${it.id}')">✏️ 編集</button>`;
+  if(role==='admin') h+=`<button class="btn btn-ng" onclick="confirmDel('${it.id}')">🗑 削除</button>`;
+  h+='</div>';
+  document.getElementById('detContent').innerHTML=h;
+}
+
+function editFromDet(id){closeOvl('detOvl');setTimeout(()=>openAdd(id),220);}
+
+/* ══ SUPPLIER REQUEST STATUS ══════════════════════════════ */
+async function markSupplierRequested(id) {
+  const it=items.find(i=>i.id===id); if(!it) return;
+  const updated={...it, supplier_requested:'requested'};
+  const idx=items.findIndex(i=>i.id===id); if(idx>=0) items[idx]=updated;
+  renderDetailContent(updated); renderList(); toast('✅ 依頼済みにしました');
+  try{showSync(true);await storeItem(updated);}catch{toast('⚠ 同期エラー');}finally{showSync(false);}
+}
+async function markSupplierUnrequested(id) {
+  const it=items.find(i=>i.id===id); if(!it) return;
+  const updated={...it, supplier_requested:'unrequested'};
+  const idx=items.findIndex(i=>i.id===id); if(idx>=0) items[idx]=updated;
+  renderDetailContent(updated); renderList(); toast('↩ 未依頼に戻しました');
+  try{showSync(true);await storeItem(updated);}catch{toast('⚠ 同期エラー');}finally{showSync(false);}
+}
+
+/* ══ DELIVERY STATUS ══════════════════════════════════════ */
+async function markDelivered(id) {
+  const it=items.find(i=>i.id===id); if(!it) return;
+  const updated={...it,delivered:true,delivered_at:new Date().toISOString()};
+  const idx=items.findIndex(i=>i.id===id); if(idx>=0) items[idx]=updated;
+  renderDetailContent(updated); renderList(); toast('📦 納品済みにしました');
+  try{showSync(true);await storeItem(updated);}catch{toast('⚠ 同期エラー');}finally{showSync(false);}
+}
+async function markUndelivered(id) {
+  const it=items.find(i=>i.id===id); if(!it) return;
+  const updated={...it,delivered:false,delivered_at:''};
+  const idx=items.findIndex(i=>i.id===id); if(idx>=0) items[idx]=updated;
+  renderDetailContent(updated); renderList(); toast('↩ 未納品に戻しました');
+  try{showSync(true);await storeItem(updated);}catch{toast('⚠ 同期エラー');}finally{showSync(false);}
+}
+
+/* ══ RETURN STATUS ════════════════════════════════════════ */
+async function markRet(id) {
+  const it=items.find(i=>i.id===id); if(!it) return;
+  const updated={...it,return_status:'returned',return_date:it.return_date||new Date().toISOString().slice(0,16)};
+  const idx=items.findIndex(i=>i.id===id); if(idx>=0) items[idx]=updated;
+  renderDetailContent(updated); renderList(); toast('✓ 返却済みにしました');
+  try { showSync(true); await storeItem(updated); } catch { toast('⚠ 同期エラー'); } finally { showSync(false); }
+}
+async function markUnret(id) {
+  const it=items.find(i=>i.id===id); if(!it) return;
+  const updated={...it,return_status:'unreturned',return_date:''};
+  const idx=items.findIndex(i=>i.id===id); if(idx>=0) items[idx]=updated;
+  renderDetailContent(updated); renderList(); toast('↩ 未返却に戻しました');
+  try { showSync(true); await storeItem(updated); } catch { toast('⚠ 同期エラー'); } finally { showSync(false); }
+}
+
+/* ══ DELETE ═══════════════════════════════════════════════ */
+function confirmDel(id) {
+  const it=items.find(i=>i.id===id); if(!it) return;
+  showConfirm('削除の確認',`「${it.name}」を削除しますか？`,async()=>{
+    try {
+      showSync(true);
+      await removeItem(id);
+      closeOvl('detOvl'); toast('🗑 削除しました');
+    } catch { toast('⚠ 削除できませんでした');
+    } finally { showSync(false); }
+  });
+}
+
+/* ══ SHARE ════════════════════════════════════════════════ */
+function buildText(id) {
+  const it=items.find(i=>i.id===id); if(!it) return '';
+  let t='【商品サンプル情報】\n';
+  t+=`商品名: ${it.name}\n`;
+  if(see('return_status')){
+    const st=getStatus(it);
+    t+=`ステータス: ${st==='returned'?'✅ 返却済み':st==='overdue'?'⚠️ 期限超過':'📦 未返却'}\n`;
+  }
+  for(const k of ['negotiation_date','borrow_date','expected_return_date','return_date','delivery_date','photo_sample_delivery_date','revision_sample_date','shoot_date','sale_date'])
+    if(see(k)&&it[k]) t+=`${FM[k].lbl}: ${fmtDate(it[k])}\n`;
+  if(see('cost_price')&&it.cost_price) t+=`仕入れ値: ${fmtPrice(it.cost_price)}\n`;
+  if(see('retail_price')&&it.retail_price) t+=`上代: ${fmtPrice(it.retail_price)}\n`;
+  if(see('memo')&&it.memo) t+=`メモ: ${it.memo}\n`;
+  return t;
+}
+function shareLine(id){window.open(`https://line.me/R/msg/text/?${encodeURIComponent(buildText(id))}`,'_blank');}
+function shareSlack(id){
+  const t=buildText(id);
+  if(navigator.clipboard&&location.protocol==='https:')
+    navigator.clipboard.writeText(t).then(()=>toast('📋 コピーしました！Slackに貼り付けてください')).catch(()=>legacyCopy(t));
+  else legacyCopy(t);
+}
+function legacyCopy(t){
+  const el=Object.assign(document.createElement('textarea'),{value:t});
+  Object.assign(el.style,{position:'fixed',left:'-9999px',top:'-9999px'});
+  document.body.appendChild(el);el.select();document.execCommand('copy');document.body.removeChild(el);
+  toast('📋 コピーしました！Slackに貼り付けてください');
+}
+
+/* ══ PHOTO VIEWER ═════════════════════════════════════════ */
+function pvOpen(photos,idx){pvPhotos=photos;pvIdx=idx;pvRefresh();document.getElementById('pvOverlay').classList.add('open');}
+function pvItem(id,idx){const it=items.find(i=>i.id===id);if(it?.photos)pvOpen(it.photos,idx);}
+function closePV(){document.getElementById('pvOverlay').classList.remove('open');}
+function pvGo(d){pvIdx=Math.max(0,Math.min(pvPhotos.length-1,pvIdx+d));pvRefresh();}
+function pvRefresh(){
+  document.getElementById('pvImg').src=pvPhotos[pvIdx];
+  document.getElementById('pvCount').textContent=`${pvIdx+1} / ${pvPhotos.length}`;
+  document.getElementById('pvPrev').disabled=pvIdx===0;
+  document.getElementById('pvNext').disabled=pvIdx===pvPhotos.length-1;
+}
+
+/* ══ MODALS / CONFIRM ═════════════════════════════════════ */
+function openOvl(id){document.getElementById(id).classList.add('open');}
+function closeOvl(id){document.getElementById(id).classList.remove('open');}
+['addOvl','detOvl'].forEach(id=>{
+  document.getElementById(id).addEventListener('click',e=>{if(e.target.id===id)closeOvl(id);});
+});
+function showConfirm(t,m,cb,lbl='削除',cls='btn-ng'){
+  document.getElementById('ctitle').textContent=t;
+  document.getElementById('cmsg').textContent=m;
+  const b=document.getElementById('cokBtn');b.textContent=lbl;b.className=`btn ${cls}`;
+  confirmCb=cb;document.getElementById('confirmOvl').classList.add('open');
+}
+function runConfirm(){closeConfirm();if(confirmCb)confirmCb();confirmCb=null;}
+function closeConfirm(){document.getElementById('confirmOvl').classList.remove('open');}
+document.getElementById('confirmOvl').addEventListener('click',e=>{if(e.target.id==='confirmOvl')closeConfirm();});
+
+/* ══ TOAST ════════════════════════════════════════════════ */
+let _tt;
+function toast(m,d=2500){
+  const el=document.getElementById('toast');
+  el.textContent=m;el.classList.add('show');
+  clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),d);
+}
+
+/* ══ PWA ══════════════════════════════════════════════════ */
+function initPWA(){
+  const c=document.createElement('canvas');c.width=c.height=192;
+  const ctx=c.getContext('2d'),r=42;
+  ctx.beginPath();ctx.moveTo(r,0);ctx.lineTo(192-r,0);
+  ctx.arc(192-r,r,r,-Math.PI/2,0);ctx.lineTo(192,192-r);
+  ctx.arc(192-r,192-r,r,0,Math.PI/2);ctx.lineTo(r,192);
+  ctx.arc(r,192-r,r,Math.PI/2,Math.PI);ctx.lineTo(0,r);
+  ctx.arc(r,r,r,Math.PI,-Math.PI/2);ctx.closePath();
+  ctx.fillStyle='#4F46E5';ctx.fill();
+  ctx.font='bold 96px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('👔',96,100);
+  const icon=c.toDataURL('image/png');
+  document.getElementById('appIcon').href=icon;
+  const mf={name:'商品サンプル管理',short_name:'サンプル管理',description:'商品サンプル管理',start_url:location.pathname,display:'standalone',background_color:'#F0F0F8',theme_color:'#4F46E5',orientation:'portrait-primary',lang:'ja',icons:[{src:icon,sizes:'192x192',type:'image/png',purpose:'any maskable'}]};
+  const blob=new Blob([JSON.stringify(mf)],{type:'application/json'});
+  document.getElementById('manifestLink').href=URL.createObjectURL(blob);
+}
+
+/* ══ ENTER KEY ════════════════════════════════════════════ */
+document.getElementById('lpw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+
+/* ══ FIREBASE 設定 ════════════════════════════════════════ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBpKF0UVGELuFXQ0DXtZ9ylpqwCMpOJvcQ",
+  authDomain: "sample-manager-8cb06.firebaseapp.com",
+  projectId: "sample-manager-8cb06",
+  storageBucket: "sample-manager-8cb06.firebasestorage.app",
+  messagingSenderId: "737347392194",
+  appId: "1:737347392194:web:98cb94fb0310fd363ca15b",
+  measurementId: "G-0N9Z93BLZ9"
+};
+
+/* ══ INIT ═════════════════════════════════════════════════ */
+function init(){
+  initPWA();
+  startApp(FIREBASE_CONFIG);
+}
+init();
+</script>
+</body>
+</html>
