@@ -801,7 +801,7 @@ function pvEdit(i) { pvOpen(editPhotos,i); }
 async function addPhotos(e) {
   for (const f of e.target.files) {
     if (editPhotos.length>=8) { toast('写真は最大8枚です'); break; }
-    try { editPhotos.push(await compress(f,500,.65)); } catch {}
+    try { editPhotos.push(await compress(f,1200,.88)); } catch {}
   }
   e.target.value=''; renderPhotoThumbs();
 }
