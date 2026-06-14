@@ -372,9 +372,9 @@ const ROLES = {
   photo_sales:{label:'撮影/営業担当',    pw:'photo1234',  icon:'📷'},
 };
 const ROLE_FIELDS = {
-  admin:      ['name','photos','memo','sample_round','negotiation_date','borrow_date','expected_return_date','return_date','return_status','delivery_date','supplier_requested','photo_sample_delivery_date','revision_sample_date','shoot_date','sale_date','cost_price','retail_price'],
-  sample_oem: ['name','photos','memo','sample_round','negotiation_date','borrow_date','expected_return_date','return_date','return_status','delivery_date','supplier_requested','photo_sample_delivery_date','revision_sample_date'],
-  photo_sales:['name','photos','memo','supplier_requested','photo_sample_delivery_date','shoot_date','cost_price','retail_price','sale_date'],
+  admin:      ['name','photos','memo','sample_round','negotiation_date','borrow_date','sample_arrival_date','expected_return_date','return_date','return_status','delivery_date','supplier_requested','photo_sample_delivery_date','revision_sample_date','shoot_date','sale_date','cost_price','retail_price','friend_price'],
+  sample_oem: ['name','photos','memo','sample_round','negotiation_date','borrow_date','sample_arrival_date','expected_return_date','return_date','return_status','delivery_date','supplier_requested','photo_sample_delivery_date','revision_sample_date'],
+  photo_sales:['name','photos','memo','supplier_requested','sample_arrival_date','return_status','expected_return_date','return_date','photo_sample_delivery_date','shoot_date','cost_price','retail_price','friend_price','sale_date'],
 
 };
 const FM = {
@@ -382,6 +382,7 @@ const FM = {
   photos:                     {lbl:'写真',                 t:'photos'},
   memo:                       {lbl:'メモ',                 t:'textarea'},
   sample_round:               {lbl:'サンプル回数',         t:'number'},
+  sample_arrival_date:        {lbl:'サンプル着日',         t:'date'},
   negotiation_date:           {lbl:'商談日',               t:'date'},
   borrow_date:                {lbl:'サンプル借用日時',     t:'datetime-local'},
   expected_return_date:       {lbl:'返却予定日時',         t:'datetime-local'},
@@ -395,6 +396,7 @@ const FM = {
   sale_date:                  {lbl:'販売日',               t:'date'},
   cost_price:                 {lbl:'仕入れ値',             t:'price'},
   retail_price:               {lbl:'上代（定価）',         t:'price'},
+  friend_price:               {lbl:'友人販売価格',         t:'price'},
 };
 const SESS = 'smp_sess_v1';
 const CFG_KEY = 'smp_firebase_cfg_v1';
@@ -658,7 +660,20 @@ function renderCard(it) {
       badge += `<span class="chip" style="background:#FEE2E2;color:#991B1B">💬 未依頼</span>`;
     }
   }
-  if (see('photo_sample_delivery_date') && it.photo_sample_delivery_date) {
+  if (see('sample_arrival_date')) {
+    if (it.sample_arrived) {
+      badge += `<span class="chip" style="background:#E0E7FF;color:#3730A3">📬 到着済み</span>`;
+    } else if (it.sample_arrival_date) {
+      const diff = Math.ceil((new Date(it.sample_arrival_date)-new Date())/(1000*60*60*24));
+      const color = diff<0?'#EF4444':diff<=3?'#D97706':'#6B7280';
+      const label = diff<0?`${Math.abs(diff)}日超過`:diff===0?'今日到着':`${diff}日後到着`;
+      meta+=`<span style="color:${color};font-weight:700">📬 サンプル: ${label}（${fmtDate(it.sample_arrival_date)}）</span><br>`;
+      qbtn+=`<button class="qbtn" style="top:9px;right:9px;bottom:auto;background:#E0E7FF;color:#3730A3" onclick="quickArrived(event,'${it.id}')">到着▶</button>`;
+    } else {
+      meta+=`<span style="color:#9CA3AF">📬 着日未定</span><br>`;
+    }
+  }
+  if (see('photo_sample_delivery_date') && it.photo_sample_delivery_date && !it.sample_arrived) {
     const diff = Math.ceil((new Date(it.photo_sample_delivery_date)-new Date())/(1000*60*60*24));
     const color = diff<0?'#EF4444':diff<=7?'#D97706':'#6B7280';
     const label = diff<0?`${Math.abs(diff)}日超過`:diff===0?'今日到着':`${diff}日後到着`;
@@ -849,7 +864,9 @@ function openDetail(id) {
 
 function renderDetailContent(it) {
   const st=getStatus(it);
-  let h='';
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <button onclick="closeOvl('detOvl')" style="background:var(--bg);border:none;border-radius:20px;padding:7px 14px;font-size:14px;font-weight:700;color:var(--t2);cursor:pointer">← 一覧に戻る</button>
+  </div>`;
   if (see('photos')&&it.photos?.length)
     h+=`<div class="dphotos">${it.photos.map((s,i)=>`<img class="dphoto" src="${s}" onclick="pvItem('${it.id}',${i})" loading="lazy">`).join('')}</div>`;
 
@@ -862,18 +879,28 @@ function renderDetailContent(it) {
   h+=`<div class="dhdr"><div class="dname">${esc(it.name)}</div>${chip}</div>`;
   if(see('memo')&&it.memo) h+=`<div class="memobox">${esc(it.memo).replace(/\n/g,'<br>')}</div>`;
 
-  const keys=ROLE_FIELDS[role].filter(k=>!['name','photos','memo','return_status'].includes(k));
+  const keys=ROLE_FIELDS[role].filter(k=>!['name','photos','memo','return_status','supplier_requested','sample_arrival_date'].includes(k));
   if(keys.length){
     h+='<div class="sdivider">詳細情報</div>';
     for(const k of keys){
       const v=it[k]; if(!v&&v!==0) continue;
       const m=FM[k];
-      const d=(m.t==='price')?fmtPrice(v):(m.t==='date'||m.t==='datetime-local')?fmtDate(v):esc(v);
+      let d;
+      if(m.t==='price') d=fmtPrice(v);
+      else if(m.t==='date'||m.t==='datetime-local') d=fmtDate(v);
+      else if(m.t==='photo_req') d=v==='requested'?'✅ 依頼済み':'💬 未依頼';
+      else d=esc(v);
       const cls=(k==='expected_return_date'&&st==='overdue')?' style="color:var(--ng)"':'';
       h+=`<div class="drow"><span class="dlabel">${m.lbl}</span><span class="dval"${cls}>${d}</span></div>`;
     }
   }
   h+='<div class="sdivider">アクション</div><div class="bstack" style="margin-top:8px">';
+  if(see('sample_arrival_date')){
+    if(!it.sample_arrived)
+      h+=`<button class="btn" style="background:#4338CA;color:#fff" onclick="markArrived('${it.id}')">📬 サンプル到着済みにする</button>`;
+    else
+      h+=`<button class="btn btn-g" onclick="markNotArrived('${it.id}')">↩ 未到着に戻す</button>`;
+  }
   if(see('supplier_requested')){
     if(it.supplier_requested!=='requested')
       h+=`<button class="btn" style="background:#7C3AED;color:#fff" onclick="markSupplierRequested('${it.id}')">💬 取引先に依頼済みにする</button>`;
@@ -899,6 +926,30 @@ function renderDetailContent(it) {
 }
 
 function editFromDet(id){closeOvl('detOvl');setTimeout(()=>openAdd(id),220);}
+
+/* ══ SAMPLE ARRIVAL ═══════════════════════════════════════ */
+async function quickArrived(e, id) {
+  e.stopPropagation();
+  const it=items.find(i=>i.id===id); if(!it) return;
+  const updated={...it, sample_arrived:true, sample_arrival_date:it.sample_arrival_date||new Date().toISOString().slice(0,10)};
+  const idx=items.findIndex(i=>i.id===id); if(idx>=0) items[idx]=updated;
+  renderList(); toast('📬 サンプル到着済みにしました');
+  try{showSync(true);await storeItem(updated);}catch{toast('⚠ 同期エラー');}finally{showSync(false);}
+}
+async function markArrived(id) {
+  const it=items.find(i=>i.id===id); if(!it) return;
+  const updated={...it, sample_arrived:true, sample_arrival_date:it.sample_arrival_date||new Date().toISOString().slice(0,10)};
+  const idx=items.findIndex(i=>i.id===id); if(idx>=0) items[idx]=updated;
+  renderDetailContent(updated); renderList(); toast('📬 サンプル到着済みにしました');
+  try{showSync(true);await storeItem(updated);}catch{toast('⚠ 同期エラー');}finally{showSync(false);}
+}
+async function markNotArrived(id) {
+  const it=items.find(i=>i.id===id); if(!it) return;
+  const updated={...it, sample_arrived:false};
+  const idx=items.findIndex(i=>i.id===id); if(idx>=0) items[idx]=updated;
+  renderDetailContent(updated); renderList(); toast('↩ 未到着に戻しました');
+  try{showSync(true);await storeItem(updated);}catch{toast('⚠ 同期エラー');}finally{showSync(false);}
+}
 
 /* ══ SUPPLIER REQUEST STATUS ══════════════════════════════ */
 async function markSupplierRequested(id) {
